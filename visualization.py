@@ -47,6 +47,8 @@ coordinates = {'Boden': (65.833333, 21.666667),
                'Örnsköldsvik': (63.2888613, 18.7160209),
                'Östersund': (63.1793655, 14.6357061)}
 
+df_cities = pd.DataFrame.from_dict(coordinates, orient='index', columns=["Latitude", "Longitude"])
+df_cities = df_cities.reset_index().rename(columns={'index': "City"})
 
 def add_edge_to_df(df_cities, df_edges, from_city, to_city):
     start_lon = df_cities[df_cities['City'] == from_city]['Longitude'].iloc[0]
@@ -59,77 +61,65 @@ def add_edge_to_df(df_cities, df_edges, from_city, to_city):
     return df_edges
 
 
-def show(sol, number_of_cities):
+def show(city_sol, edge_sol):
 
-    df_cities = pd.DataFrame.from_dict(
-        coordinates, orient='index', columns=["Latitude", "Longitude"])
-    df_cities = df_cities.reset_index().rename(columns={'index': "City"})
-    df_cities = df_cities.iloc[:number_of_cities]
-    df_sol = df_sol = pd.DataFrame(sol)
+    city_sol = pd.concat([df_cities, city_sol], axis=1, join='inner')
+    
 
+    # Build df with edges from - to coordinates
     df_edges = pd.DataFrame(
         columns=['start_lat', 'start_lon', 'end_lat', 'end_lon'])
-    for index, row in df_sol.iterrows():
+    for index, row in edge_sol.iterrows():
 
         df_edges = add_edge_to_df(df_cities, df_edges, row['From'], row['To'])
 
-    max_flow = max(df_sol['Flow'])
-
+    
     fig = go.Figure()
 
+    # draw edges
     for i in range(len(df_edges)):
-
-        if df_sol.iloc[i]['Type'] != 'CORE':
-            continue
-        flow = df_sol.iloc[i]['Flow']
-        hover_data = df_sol['From'][i] + ' - ' + \
-            df_sol['To'] + ': ' + str(round(flow, 2))
-
+        if edge_sol.iloc[i]['Type'] == 'CORE':
+            color='red'
+        else:
+            color = 'blue'
+       
         fig.add_trace(
             go.Scattermapbox(
-
                 lon=[df_edges['start_lon'][i], df_edges['end_lon'][i]],
                 lat=[df_edges['start_lat'][i], df_edges['end_lat'][i]],
-                hoverinfo='text',
-                text=hover_data,
                 mode='markers+lines',
-                line=dict(width=3, color='red'),
+                line=dict(width=3, color=color),
                 opacity=0.7
             )
         )
 
-    for i in range(len(df_edges)):
-        if df_sol.iloc[i]['Type'] != 'SUB':
-            continue
-        flow = df_sol.iloc[i]['Flow']
-        hover_data = df_sol['From'][i] + ' - ' + \
-            df_sol['To'] + ': ' + str(round(flow, 2))
-        fig.add_trace(
-            go.Scattermapbox(
+    # draw cities
+    for i in range(len(city_sol)):
+        if city_sol['IsControlCenter'][i]:
+            text = city_sol['Name'][i] + ' is control center'
+            color = 'green'
+            size = 8
+        else:
+            text = city_sol['Name'][i]
+            color = 'red'
+            size = 4
 
-                lon=[df_edges['start_lon'][i], df_edges['end_lon'][i]],
-                lat=[df_edges['start_lat'][i], df_edges['end_lat'][i]],
-                hoverinfo='text',
-                text=hover_data,
-                mode='markers+lines',
-                line=dict(width=1.5, color='blue'),
-                opacity=0.7
-            )
-        )
+        ingoing = round(city_sol['IngoingFlow'][i], 1)
+        outgoing = round(city_sol['OutgoingFlow'][i], 1)
+        
+        text += ', Ingoing flow: ' + str(ingoing)
+        text += ', Outgoing flow: ' + str(outgoing)
+        fig.add_trace(go.Scattermapbox(
 
-    fig.add_trace(go.Scattermapbox(
-
-        lon=df_cities['Longitude'],
-        lat=df_cities['Latitude'],
-        hoverinfo='text',
-        text=df_cities['City'],
-        mode='markers',
-        marker=dict(
-            size=4,
-            color='rgb(255, 0, 0)',
-
-
-        )))
+            lon=[city_sol['Longitude'][i]],
+            lat=[city_sol['Latitude'][i]],
+            hoverinfo='text',
+            text=text,
+            mode='markers',
+            marker=dict(
+                size=size,
+                color=color,
+            )))
 
     fig.update_layout(
         title_text='Automax',
