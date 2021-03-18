@@ -70,11 +70,11 @@ class Autonomax:
         )
 
         # Force cc to 1 if a city has an adjacent core edge
-        model.addConstrs(
-            (is_core_city[i] >= is_core_edge[normalize(i, j)]
-             for i, j in product(CITIES, repeat=2) if i != j),
-            name='core-city-lb'
-        )
+        # model.addConstrs(
+        #    (is_core_city[i] >= is_core_edge[normalize(i, j)]
+        #    for i, j in product(CITIES, repeat=2) if i != j),
+        #    name='core-city-lb'
+        # )
 
         # A cycle has |V| = |E|. A path has |V| = |E| + 1
         model.addConstr(sum(is_core_city[i] for i in CITIES) == sum(
@@ -132,29 +132,38 @@ class Autonomax:
         )
 
         # How much (directed) demand is sent along an edge between two cities
-        flow = model.addVars(CITIES, CITIES, name='flow')
+        flow = model.addVars(EDGES, lb=-sum(demand),
+                             ub=sum(demand), name='flow')
+        abs_flow = model.addVars(EDGES, ub=sum(demand), name='abs-flow')
+        model.addConstrs(
+            (abs_flow[e] == gp.abs_(flow[e]) for e in EDGES)
+        )
         # What direction a flow is sent in. For i < j: 1 = forward (i -> j), 0 = backward (j -> i)
-        direction = model.addVars(
-            EDGES, vtype=GRB.BINARY, name='flow-direction')
+        # direction = model.addVars(
+        #    EDGES, vtype=GRB.BINARY, name='flow-direction')
 
         # We can only run flow in a single direction
-        model.addConstrs(
-            (flow[i, j] <= sum(demand) * direction[i, j] for (i, j) in EDGES),
-            name='flow-dir-forward'
-        )
+        # model.addConstrs(
+        #    (flow[i, j] <= sum(demand) * direction[i, j] for (i, j) in EDGES),
+        #    name='flow-dir-forward'
+        # )
 
         # We can only run flow in a single direction
-        model.addConstrs(
-            (flow[j, i] <= sum(demand) * (1 - direction[i, j])
-             for (i, j) in EDGES),
-            name='flow-dir-backward'
-        )
+        # model.addConstrs(
+        #    (flow[j, i] <= sum(demand) * (1 - direction[i, j])
+        #     for (i, j) in EDGES),
+        #    name='flow-dir-backward'
+        # )
 
         # The required surplus must equal the difference between (ingoing + self demand) - (outgoing)
+        # model.addConstrs(
+        #    (sum(demand) * is_control_center[i] == demand[i] + sum(flow[j, i]
+        #     for j in CITIES if j != i) - sum(flow[i, j] for j in CITIES if j != i) for i in CITIES),
+        #    name='conservation-of-flow'
+        # )
         model.addConstrs(
-            (sum(demand) * is_control_center[i] == demand[i] + sum(flow[j, i]
-             for j in CITIES if j != i) - sum(flow[i, j] for j in CITIES if j != i) for i in CITIES),
-            name='conservation-of-flow'
+            (sum(demand) * is_control_center[i] == demand[i] + sum(
+                flow[normalize(i, j)] * (1 if i > j else -1) for j in CITIES if j != i) for i in CITIES)
         )
 
         # Whether an edge is a sub edge, i.e. part of the sub network.
@@ -163,16 +172,15 @@ class Autonomax:
 
         # We can only send flow along an edge if it is either a sub edge or a core edge
         model.addConstrs(
-            (sum(demand) * (is_sub_edge[e] + is_core_edge[e]) >=
-             flow[e] + flow[tuple(reversed(e))] for e in EDGES),
+            (sum(demand) * (is_sub_edge[e] + is_core_edge[e])
+             >= abs_flow[e] for e in EDGES),
             name='force-is-edge-up-if-flow',
 
         )
 
         # Force is_sub_edge to 0 if there is no flow (with M = min(demand))
         model.addConstrs(
-            (min(demand) * is_sub_edge[e] <= flow[e] +
-             flow[tuple(reversed(e))] for e in EDGES),
+            (min(demand) * is_sub_edge[e] <= abs_flow[e] for e in EDGES),
             name='force-is-edge-down-if-no-flow',
         )
 
@@ -189,7 +197,7 @@ class Autonomax:
         def M(e): return 10 + (0.1 * D[e])**1.5 * sum(demand)
         model.addConstrs(
             (edge_cost[e] + M(e) * is_core_edge[e] >= 10 * is_sub_edge[e] +
-             (0.1 * D[e])**1.5 * (flow[e] + flow[tuple(reversed(e))]) for e in EDGES),
+             (0.1 * D[e])**1.5 * abs_flow[e] for e in EDGES),
             name='edge-cost-lb'
         )
 
@@ -206,7 +214,7 @@ class Autonomax:
         self.is_connected_step = is_connected_step
         self.is_connectable_step = is_connectable_step
         self.flow = flow
-        self.direction = direction
+        #self.direction = direction
         self.is_sub_edge = is_sub_edge
         self.edge_cost = edge_cost
         self.CITIES = CITIES
@@ -221,7 +229,7 @@ class Autonomax:
             'From': self.config.cities[i],
             'To': self.config.cities[j],
             'Type': 'CORE' if normalize(i, j) in core else 'SUB',
-            'Flow': self.flow[i, j].x - self.flow[j, i].x,
+            'Flow': self.flow[i, j].x,
             'Cost': (10 * D[i, j] * self.is_core_edge[normalize(i, j)] + self.edge_cost[normalize(i, j)]).getValue(),
             'Distance': D[i, j],
         } for (i, j) in set(core + utilized)]
@@ -236,6 +244,6 @@ class Autonomax:
             'IsCoreCity': i in core_cities,
             'IsControlCenter': i in control_center,
             'Demand': self.config.demand[i],
-            'IngoingFlow': sum(self.flow[j, i] for j in self.CITIES if j != i).getValue(),
-            'OutgoingFlow': sum(self.flow[i, j] for j in self.CITIES if j != i).getValue(),
+            'IngoingFlow': sum(self.flow[normalize(i, j)] * (0 if j > i and self.else 1) for j in self.CITIES if j != i).getValue(),
+            'OutgoingFlow': sum(self.flow[normalize(i, j)] * (1 if j > i else -1) for j in self.CITIES if j != i).getValue(),
         } for i in self.CITIES]
