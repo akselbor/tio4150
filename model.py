@@ -214,7 +214,7 @@ class Autonomax:
         self.is_connected_step = is_connected_step
         self.is_connectable_step = is_connectable_step
         self.flow = flow
-        #self.direction = direction
+        # self.direction = direction
         self.is_sub_edge = is_sub_edge
         self.edge_cost = edge_cost
         self.CITIES = CITIES
@@ -244,6 +244,8 @@ class Autonomax:
             'IsCoreCity': i in core_cities,
             'IsControlCenter': i in control_center,
             'Demand': self.config.demand[i],
-            'IngoingFlow': sum(self.flow[normalize(i, j)] * (0 if j > i and self.else 1) for j in self.CITIES if j != i).getValue(),
-            'OutgoingFlow': sum(self.flow[normalize(i, j)] * (1 if j > i else -1) for j in self.CITIES if j != i).getValue(),
+            # IngoingFlow: if the last point is i and the flow is positive or the first point is i and the flow is negative
+            'IngoingFlow': sum(abs(self.flow[a, b].x) * (1 if ((b == i and self.flow[a, b].x > 0) or (a == i and self.flow[a, b].x < 0)) else 0) for (a, b) in self.EDGES),
+            # OutgoingFlow: if the first point is i and the flow is positive or the last point is i and the flow is negative
+            'OutgoingFlow': sum(abs(self.flow[a, b].x) * (1 if ((a == i and self.flow[a, b].x > 0) or (b == i and self.flow[a, b].x < 0)) else 0) for (a, b) in self.EDGES),
         } for i in self.CITIES]
