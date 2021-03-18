@@ -59,8 +59,8 @@ def add_edge_to_df(df_cities, df_edges, from_city, to_city):
     return df_edges
 
 
-def show(sol, number_of_cities):
-
+def show(city_col, sol):
+    number_of_cities = len(city_col)
     df_cities = pd.DataFrame.from_dict(
         coordinates, orient='index', columns=["Latitude", "Longitude"])
     df_cities = df_cities.reset_index().rename(columns={'index': "City"})
@@ -106,7 +106,6 @@ def show(sol, number_of_cities):
             df_sol['To'] + ': ' + str(round(flow, 2))
         fig.add_trace(
             go.Scattermapbox(
-
                 lon=[df_edges['start_lon'][i], df_edges['end_lon'][i]],
                 lat=[df_edges['start_lat'][i], df_edges['end_lat'][i]],
                 hoverinfo='text',
