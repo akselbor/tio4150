@@ -64,6 +64,15 @@ class Autonomax:
             name='control-center-directly-connected'
         )
 
+        # Fixes the control center to be the one with the lowest index among the set of core cities
+        # Reduces symmetry, since the choice of control center within a set of core cities has no effect on neither feasibility nor cost.
+        # NOTE: must be disabled if one wants to fix the control center to a certain town
+        reduce_control_center_symmetry = model.addConstrs(
+            (len(CITIES) - (len(CITIES) - i) *
+             is_control_center[i] >= j * is_core_city[j] for i, j in product(CITIES, CITIES)),
+            name='force-control-center-to-highest-core-city-index',
+        )
+
         # Force cc to 0 if a city has no adjacent core edges
         core_city_ub = model.addConstrs(
             (is_core_city[i] <= sum(is_core_edge[normalize(i, j)]
@@ -176,7 +185,6 @@ class Autonomax:
         self.is_connected_step = is_connected_step
         self.is_connectable_step = is_connectable_step
         self.flow = flow
-        # self.direction = direction
         self.is_sub_edge = is_sub_edge
         self.edge_cost = edge_cost
         self.CITIES = CITIES
@@ -185,6 +193,7 @@ class Autonomax:
         self.constraints = {
             'one_control_center': one_control_center,
             'control_city_directly_connected': control_city_directly_connected,
+            'reduce_control_center_symmetry': reduce_control_center_symmetry,
             'core_city_ub': core_city_ub,
             'cycle_or_path': cycle_or_path,
             'disallow_core_tree': disallow_core_tree,
@@ -206,7 +215,7 @@ class Autonomax:
             'is_connected_step': is_connected_step,
             'is_connectable_step': is_connectable_step,
             'flow': flow,
-            # 'abs_flow': abs_flow,
+            'abs_flow': abs_flow,
             'is_sub_edge': is_sub_edge,
             'edge_cost': edge_cost
         }
