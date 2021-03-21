@@ -128,6 +128,10 @@ class Autonomax:
             name='is-connected-timestep'
         )
 
+        for t in range(T):
+            model.addSOS(GRB.SOS_TYPE1, [
+                         is_connected_step[i, t] for i in CITIES])
+
         # Ensure that all core cities are connected at some timestep
         connected_graph = model.addConstrs(
             (sum(is_connected_step[i, t] for t in range(
