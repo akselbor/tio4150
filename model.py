@@ -222,7 +222,8 @@ class Autonomax:
 
     def edge_info(self):
         core = list(non_zero(self.is_core_edge))
-        utilized = [normalize(*e) for e in non_zero(self.flow)]
+        sub = list(non_zero(self.is_sub_edge))
+        # utilized = [normalize(*e) for e in non_zero(self.flow)]
         D = self.config.distances
 
         return [{
@@ -232,7 +233,7 @@ class Autonomax:
             'Flow': self.flow[i, j].x,
             'Cost': (10 * D[i, j] * self.is_core_edge[normalize(i, j)] + self.edge_cost[normalize(i, j)]).getValue(),
             'Distance': D[i, j],
-        } for (i, j) in set(core + utilized)]
+        } for (i, j) in set(core + sub)]
 
     def city_info(self):
         core_cities = list(non_zero(self.is_core_city))
